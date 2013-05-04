@@ -1,0 +1,49 @@
+--- s3curl.pl.orig      2011-12-14 17:08:11.000000000 -0800
++++ s3curl.pl   2013-05-03 23:34:41.000000000 -0700
+@@ -63,6 +63,7 @@
+ my $EXECFILE=$FindBin::Bin;
+ my $LOCALDOTFILE = $EXECFILE . "/" . $DOTFILENAME;
+ my $HOMEDOTFILE = $ENV{HOME} . "/" . $DOTFILENAME;
++my $AWSCREDENTIALFILE = $ENV{AWS_CREDENTIAL_FILE};
+ my $DOTFILE = -f $LOCALDOTFILE? $LOCALDOTFILE : $HOMEDOTFILE;
+ 
+ if (-f $DOTFILE) {
+@@ -80,6 +81,12 @@
+     close CONFIG;
+     eval("@lines");
+     die "Failed to eval() file $DOTFILE:\n$@\n" if ($@);
++} elsif ( -f $AWSCREDENTIALFILE ) {
++    open(CONFIG, $AWSCREDENTIALFILE) || die "can't open $AWSCREDENTIALFILE: $!";
++    while(<CONFIG>) {
++        chomp;
++        $awsSecretAccessKeys{$1} = $2 while /\s*(\S+)=(\S+)/g;
++    }
+ }
+ 
+ GetOptions(
+@@ -119,14 +126,14 @@
+   -H 'x-amz-acl: public-read' another way of using canned ACLs
+   -v                          verbose logging
+ USAGE
+-die $usage if $help || !defined $keyId;
++die $usage if $help || !defined $keyId && ! -f $AWSCREDENTIALFILE;
+ 
+ if ($cmdLineSecretKey) {
+     printCmdlineSecretWarning();
+     sleep 5;
+ 
+     $secretKey = $cmdLineSecretKey;
+-} else {
++} elsif (defined $keyId) {
+     my $keyinfo = $awsSecretAccessKeys{$keyId};
+     die "I don't know about key with friendly name $keyId. " .
+         "Do you need to set it up in $DOTFILE?"
+@@ -134,6 +141,9 @@
+     $keyId = $keyinfo->{id};
+     $secretKey = $keyinfo->{key};
++} else {
++    $keyId = $awsSecretAccessKeys{'AWSAccessKeyId'};
++    $secretKey = $awsSecretAccessKeys{'AWSSecretKey'};
+ }
+ 
+ if ($contentMD5 && $calculateContentMD5) {
